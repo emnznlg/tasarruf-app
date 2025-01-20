@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tasarruf/src/core/database/database.dart';
 import 'package:tasarruf/src/core/database/database_provider.dart';
 import 'package:tasarruf/src/features/transactions/presentation/pages/add_transaction_page.dart';
+import 'package:tasarruf/src/features/transactions/presentation/pages/edit_transaction_page.dart';
 import 'package:tasarruf/src/features/settings/presentation/pages/settings_page.dart';
 import 'package:tasarruf/src/features/transactions/presentation/providers/date_range_provider.dart';
 import 'package:intl/intl.dart';
@@ -71,6 +72,16 @@ class TransactionsPage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => Center(child: Text('Hata: $error')),
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => const AddTransactionPage(),
+            ),
+          );
+        },
+        child: const Icon(Icons.add),
+      ),
     );
   }
 }
@@ -108,10 +119,14 @@ class TransactionsList extends ConsumerWidget {
       );
     }
 
-    final totalExpenses = transactions
+    // Tarihe göre sıralama
+    final sortedTransactions = List<Transaction>.from(transactions)
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    final totalExpenses = sortedTransactions
         .where((t) => t.isExpense)
         .fold(0.0, (sum, t) => sum + t.amount);
-    final totalIncome = transactions
+    final totalIncome = sortedTransactions
         .where((t) => !t.isExpense)
         .fold(0.0, (sum, t) => sum + t.amount);
     final balance = totalIncome - totalExpenses;
@@ -132,7 +147,7 @@ class TransactionsList extends ConsumerWidget {
                       style: TextStyle(fontSize: 16),
                     ),
                     Text(
-                      '${totalIncome.toStringAsFixed(2)} ₺',
+                      '€${totalIncome.toStringAsFixed(2)}',
                       style: const TextStyle(
                         fontSize: 16,
                         color: Colors.green,
@@ -150,7 +165,7 @@ class TransactionsList extends ConsumerWidget {
                       style: TextStyle(fontSize: 16),
                     ),
                     Text(
-                      '${totalExpenses.toStringAsFixed(2)} ₺',
+                      '€${totalExpenses.toStringAsFixed(2)}',
                       style: const TextStyle(
                         fontSize: 16,
                         color: Colors.red,
@@ -168,7 +183,7 @@ class TransactionsList extends ConsumerWidget {
                       style: TextStyle(fontSize: 16),
                     ),
                     Text(
-                      '${balance.toStringAsFixed(2)} ₺',
+                      '€${balance.toStringAsFixed(2)}',
                       style: TextStyle(
                         fontSize: 16,
                         color: balance >= 0 ? Colors.green : Colors.red,
@@ -177,74 +192,17 @@ class TransactionsList extends ConsumerWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const AddTransactionPage(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.add),
-                  label: const Text('İşlem Ekle'),
-                ),
               ],
             ),
           ),
         ),
         Expanded(
           child: ListView.builder(
-            itemCount: transactions.length,
+            itemCount: sortedTransactions.length,
             itemBuilder: (context, index) {
-              final transaction = transactions[index];
-              return Dismissible(
-                key: Key('transaction-${transaction.id}'),
-                direction: DismissDirection.endToStart,
-                background: Container(
-                  color: Colors.red,
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 16),
-                  child: const Icon(
-                    Icons.delete,
-                    color: Colors.white,
-                  ),
-                ),
-                confirmDismiss: (direction) async {
-                  final confirmed = await showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('İşlemi Sil'),
-                      content: const Text(
-                          'Bu işlemi silmek istediğinize emin misiniz?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(false),
-                          child: const Text('İptal'),
-                        ),
-                        FilledButton(
-                          onPressed: () => Navigator.of(context).pop(true),
-                          child: const Text('Sil'),
-                        ),
-                      ],
-                    ),
-                  );
-
-                  if (confirmed == true) {
-                    // ignore: use_build_context_synchronously
-                    await ref
-                        .read(transactionNotifierProvider.notifier)
-                        .deleteTransaction(transaction.id);
-                    // ignore: use_build_context_synchronously
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('İşlem silindi'),
-                      ),
-                    );
-                  }
-
-                  return confirmed;
-                },
+              final transaction = sortedTransactions[index];
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: ListTile(
                   leading: Icon(
                     transaction.isExpense ? Icons.remove : Icons.add,
@@ -252,14 +210,84 @@ class TransactionsList extends ConsumerWidget {
                   ),
                   title: Text(transaction.description),
                   subtitle: Text(
-                    DateFormat('dd/MM/yyyy').format(transaction.date),
+                    DateFormat('d MMMM y', 'tr_TR').format(transaction.date),
                   ),
-                  trailing: Text(
-                    '${transaction.isExpense ? "-" : "+"}${transaction.amount.toStringAsFixed(2)} ₺',
-                    style: TextStyle(
-                      color: transaction.isExpense ? Colors.red : Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '€${transaction.amount.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          color:
+                              transaction.isExpense ? Colors.red : Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: IconButton(
+                          icon: const Icon(Icons.edit, size: 18),
+                          padding: EdgeInsets.zero,
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => EditTransactionPage(
+                                  transaction: transaction,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: IconButton(
+                          icon: const Icon(Icons.delete, size: 18),
+                          padding: EdgeInsets.zero,
+                          color: Colors.red,
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('İşlemi Sil'),
+                                content: const Text(
+                                  'Bu işlemi silmek istediğinize emin misiniz?',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(),
+                                    child: const Text('İptal'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () {
+                                      ref
+                                          .read(transactionNotifierProvider
+                                              .notifier)
+                                          .deleteTransaction(transaction.id);
+                                      Navigator.of(context).pop();
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text('İşlem silindi'),
+                                        ),
+                                      );
+                                    },
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                    ),
+                                    child: const Text('Sil'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );

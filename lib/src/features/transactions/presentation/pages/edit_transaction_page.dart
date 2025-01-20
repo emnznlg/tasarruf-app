@@ -1,23 +1,40 @@
-import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tasarruf/src/core/database/database.dart';
 import 'package:tasarruf/src/core/database/database_provider.dart';
+import 'package:intl/intl.dart';
 
-class AddTransactionPage extends ConsumerStatefulWidget {
-  const AddTransactionPage({super.key});
+class EditTransactionPage extends ConsumerStatefulWidget {
+  final Transaction transaction;
+
+  const EditTransactionPage({
+    super.key,
+    required this.transaction,
+  });
 
   @override
-  ConsumerState<AddTransactionPage> createState() => _AddTransactionPageState();
+  ConsumerState<EditTransactionPage> createState() =>
+      _EditTransactionPageState();
 }
 
-class _AddTransactionPageState extends ConsumerState<AddTransactionPage> {
+class _EditTransactionPageState extends ConsumerState<EditTransactionPage> {
   final _formKey = GlobalKey<FormState>();
-  final _descriptionController = TextEditingController();
-  final _amountController = TextEditingController();
-  bool _isExpense = true;
-  DateTime _selectedDate = DateTime.now();
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _amountController;
+  late bool _isExpense;
+  late DateTime _selectedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _descriptionController =
+        TextEditingController(text: widget.transaction.description);
+    _amountController =
+        TextEditingController(text: widget.transaction.amount.toString());
+    _isExpense = widget.transaction.isExpense;
+    _selectedDate = widget.transaction.date;
+  }
 
   @override
   void dispose() {
@@ -41,19 +58,19 @@ class _AddTransactionPageState extends ConsumerState<AddTransactionPage> {
     }
   }
 
-  void _saveTransaction() {
+  void _updateTransaction() {
     if (_formKey.currentState!.validate()) {
       final amount = double.parse(_amountController.text.replaceAll(',', '.'));
-      final transaction = TransactionsCompanion(
-        amount: Value(amount),
-        description: Value(_descriptionController.text),
-        date: Value(_selectedDate),
-        isExpense: Value(_isExpense),
+      final updatedTransaction = widget.transaction.copyWith(
+        amount: amount,
+        description: _descriptionController.text,
+        date: _selectedDate,
+        isExpense: _isExpense,
       );
 
       ref
           .read(transactionNotifierProvider.notifier)
-          .addTransaction(transaction);
+          .updateTransaction(updatedTransaction);
       Navigator.of(context).pop();
     }
   }
@@ -62,7 +79,7 @@ class _AddTransactionPageState extends ConsumerState<AddTransactionPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('İşlem Ekle'),
+        title: const Text('İşlemi Düzenle'),
       ),
       body: Form(
         key: _formKey,
@@ -87,23 +104,6 @@ class _AddTransactionPageState extends ConsumerState<AddTransactionPage> {
                 setState(() {
                   _isExpense = newSelection.first;
                 });
-              },
-              style: ButtonStyle(
-                iconSize: MaterialStateProperty.all(18),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _descriptionController,
-              decoration: const InputDecoration(
-                labelText: 'Açıklama',
-                border: OutlineInputBorder(),
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Lütfen bir açıklama girin';
-                }
-                return null;
               },
             ),
             const SizedBox(height: 16),
@@ -130,16 +130,30 @@ class _AddTransactionPageState extends ConsumerState<AddTransactionPage> {
               },
             ),
             const SizedBox(height: 16),
+            TextFormField(
+              controller: _descriptionController,
+              decoration: const InputDecoration(
+                labelText: 'Açıklama',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Lütfen bir açıklama girin';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: _selectDate,
               icon: const Icon(Icons.calendar_today),
               label: Text(
-                'Tarih: ${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
+                DateFormat('d MMMM y', 'tr_TR').format(_selectedDate),
               ),
             ),
             const SizedBox(height: 32),
             FilledButton.icon(
-              onPressed: _saveTransaction,
+              onPressed: _updateTransaction,
               icon: const Icon(Icons.save),
               label: const Text('Kaydet'),
             ),
